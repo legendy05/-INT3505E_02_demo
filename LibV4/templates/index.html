@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hệ Thống Thư Viện V4 - Cacheable</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            color: #333;
+            max-width: 1200px;
+            margin: auto;
+            padding: 20px;
+        }
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 40px;
+        }
+        .sidebar {
+            grid-column: 1 / 2;
+        }
+        .main-content {
+            grid-column: 2 / 3;
+        }
+        h1, h2, h3 {
+            color: #0056b3;
+            border-bottom: 2px solid #f0f0f0;
+            padding-bottom: 5px;
+        }
+        .item, .form-section {
+            background: #fff;
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        input[type="text"], input[type="password"] {
+            width: calc(100% - 20px);
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Hệ Thống Thư Viện V4 (Cacheable)</h1>
+
+    <div class="container">
+        <div class="sidebar">
+            <div class="form-section">
+                <h3>👤 Đăng nhập</h3>
+                <input type="text" id="username" placeholder="Username (vd: user_one)">
+                <input type="password" id="password" placeholder="Password (vd: password1)">
+                <button onclick="login()">Đăng nhập</button>
+            </div>
+            <div id="user-status" class="form-section">
+                </div>
+        </div>
+
+        <div class="main-content">
+            <section>
+                <h2>📚 Sách Trong Thư Viện</h2>
+                <div id="book-list"></div>
+            </section>
+
+            <section>
+                <h2>📋 Phiếu Mượn Hiện Tại</h2>
+                <div id="borrow-list"></div>
+            </section>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = '/api';
+
+        // --- CÁC HÀM XỬ LÝ XÁC THỰC VÀ TOKEN ---
+
+        async function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            const response = await fetch(`${API_URL}/login`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': 'Basic ' + btoa(`${username}:${password}`)
+                }
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                localStorage.setItem('token', data.token);
+                alert('Đăng nhập thành công!');
+                updateUserStatus();
+                refreshAllData();
+            } else {
+                localStorage.removeItem('token');
+                alert('Sai tên đăng nhập hoặc mật khẩu.');
+                updateUserStatus();
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('token');
+            alert('Đã đăng xuất.');
+            updateUserStatus();
+            refreshAllData();
+        }
+
+        function updateUserStatus() {
+            const token = localStorage.getItem('token');
+            const userStatusDiv = document.getElementById('user-status');
+            if (token) {
+                // Giải mã token để lấy thông tin (chỉ để hiển thị, không dùng cho bảo mật phía client)
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                userStatusDiv.innerHTML = `
+                    <p>Xin chào, <strong>user_id: ${payload.user_id}</strong>!</p>
+                    <p>Token hết hạn lúc: ${new Date(payload.exp * 1000).toLocaleTimeString()}</p>
+                    <button onclick="logout()">Đăng xuất</button>
+                `;
+            } else {
+                userStatusDiv.innerHTML = '<p>Bạn chưa đăng nhập.</p>';
+            }
+        }
+
+
+        // --- CÁC HÀM GỌI API VÀ VẼ LẠI GIAO DIỆN ---
+
+        async function fetchBooks() {
+            const response = await fetch(`${API_URL}/books`);
+            const books = await response.json();
+            const bookListDiv = document.getElementById('book-list');
+            bookListDiv.innerHTML = '';
+
+            books.forEach(book => {
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'item';
+                itemDiv.innerHTML = `
+                    <strong>${book.title}</strong> - <em>${book.author}</em><br>
+                    <span>Số lượng còn lại: ${book.quantity}</span><br>
+                    <button onclick="borrowBook(${book.id})" ${book.quantity <= 0 ? 'disabled' : ''}>Mượn Sách</button>
+                `;
+                bookListDiv.appendChild(itemDiv);
+            });
+        }
+
+        async function fetchBorrowRecords() {
+            const response = await fetch(`${API_URL}/borrow-records`);
+            const records = await response.json();
+            const borrowListDiv = document.getElementById('borrow-list');
+            borrowListDiv.innerHTML = '';
+
+            records.forEach(record => {
+                if (!record.is_returned) {
+                    const itemDiv = document.createElement('div');
+                    itemDiv.className = 'item';
+                    itemDiv.innerHTML = `
+                        <strong>Sách: ${record.book_title}</strong> (mượn bởi user ${record.user_id})<br>
+                        <span>Ngày mượn: ${new Date(record.borrow_date).toLocaleString()}</span><br>
+                        <button onclick="returnBook(${record.id})">Trả Sách</button>
+                    `;
+                    borrowListDiv.appendChild(itemDiv);
+                }
+            });
+        }
+
+        function refreshAllData() {
+            fetchBooks();
+            fetchBorrowRecords();
+        }
+
+
+        // --- CÁC HÀM XỬ LÝ HÀNH ĐỘNG CỦA NGƯỜI DÙNG ---
+
+        async function borrowBook(bookId) {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                alert('Vui lòng đăng nhập để thực hiện chức năng này!');
+                return;
+            }
+
+            const response = await fetch(`${API_URL}/borrow-records`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-access-token': token // Gửi token trong header
+                },
+                body: JSON.stringify({ book_id: bookId })
+            });
+
+            const result = await response.json();
+            alert(result.message || result.error);
+            if(response.ok) refreshAllData();
+        }
+
+        async function returnBook(recordId) {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                alert('Vui lòng đăng nhập để thực hiện chức năng này!');
+                return;
+            }
+
+            const response = await fetch(`${API_URL}/borrow-records/${recordId}`, {
+                method: 'DELETE',
+                headers: {
+                    'x-access-token': token // Gửi token trong header
+                }
+            });
+
+            const result = await response.json();
+            alert(result.message || result.error);
+            if(response.ok) refreshAllData();
+        }
+
+        // --- KHỞI TẠO KHI TẢI TRANG ---
+        window.onload = () => {
+            updateUserStatus();
+            refreshAllData();
+        };
+    </script>
+
+</body>
+</html>
