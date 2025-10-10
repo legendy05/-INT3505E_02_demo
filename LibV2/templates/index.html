@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hệ Thống Thư Viện V2</title>
+    <style>
+        body { font-family: sans-serif; max-width: 900px; margin: auto; padding: 20px; display: flex; gap: 40px; }
+        h1, h2, h3 { color: #333; }
+        .section { flex: 1; }
+        .item { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; border-radius: 5px; }
+        .item button { margin-top: 5px; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <div class="section">
+        <h1>📚 Sách Trong Thư Viện</h1>
+        <div id="book-list"></div>
+    </div>
+
+    <div class="section">
+        <h1>📋 Phiếu Mượn Hiện Tại</h1>
+        <div id="borrow-list"></div>
+    </div>
+
+    <script>
+        const API_URL = '/api';
+
+        // --- CÁC HÀM GỌI API VÀ VẼ LẠI GIAO DIỆN ---
+
+        // Hàm lấy danh sách sách và hiển thị
+        async function fetchBooks() {
+            const response = await fetch(`${API_URL}/books`);
+            const books = await response.json();
+            const bookListDiv = document.getElementById('book-list');
+            bookListDiv.innerHTML = ''; // Xóa danh sách cũ
+
+            books.forEach(book => {
+                const bookDiv = document.createElement('div');
+                bookDiv.className = 'item';
+                bookDiv.innerHTML = `
+                    <strong>${book.title}</strong> - <em>${book.author}</em><br>
+                    <span>Số lượng còn lại: ${book.quantity}</span><br>
+                    <button onclick="borrowBook(${book.id})" ${book.quantity <= 0 ? 'disabled' : ''}>Mượn Sách</button>
+                `;
+                bookListDiv.appendChild(bookDiv);
+            });
+        }
+
+        // Hàm lấy danh sách phiếu mượn và hiển thị
+        async function fetchBorrowRecords() {
+            // Lưu ý: Server V2 cần có API để lấy danh sách phiếu mượn
+            // Chúng ta sẽ thêm nó vào app_v2.py
+            const response = await fetch(`${API_URL}/borrow-records`);
+            const records = await response.json();
+            const borrowListDiv = document.getElementById('borrow-list');
+            borrowListDiv.innerHTML = ''; // Xóa danh sách cũ
+
+            records.forEach(record => {
+                // Chỉ hiển thị các phiếu chưa trả
+                if (!record.is_returned) {
+                    const recordDiv = document.createElement('div');
+                    recordDiv.className = 'item';
+                    recordDiv.innerHTML = `
+                        <strong>Sách: ${record.book_title}</strong> (ID phiếu: ${record.id})<br>
+                        <span>Ngày mượn: ${new Date(record.borrow_date).toLocaleString()}</span><br>
+                        <button onclick="returnBook(${record.id})">Trả Sách</button>
+                    `;
+                    borrowListDiv.appendChild(recordDiv);
+                }
+            });
+        }
+
+        // Hàm làm mới toàn bộ dữ liệu trên trang
+        function refreshAllData() {
+            fetchBooks();
+            fetchBorrowRecords();
+        }
+
+
+        // --- CÁC HÀM XỬ LÝ HÀNH ĐỘNG CỦA NGƯỜI DÙNG ---
+
+        // Hàm gọi API tạo phiếu mượn mới
+        async function borrowBook(bookId) {
+            const response = await fetch(`${API_URL}/borrow-records`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ book_id: bookId, user_id: 1 }) // Gửi kèm book_id
+            });
+            const result = await response.json();
+            if (response.ok) {
+                alert(result.message);
+            } else {
+                alert(`Lỗi: ${result.error}`);
+            }
+            refreshAllData(); // Tải lại cả 2 danh sách
+        }
+
+        // Hàm gọi API để xóa (trả) một phiếu mượn
+        async function returnBook(recordId) {
+            const response = await fetch(`${API_URL}/borrow-records/${recordId}`, {
+                method: 'DELETE'
+            });
+            const result = await response.json();
+            alert(result.message);
+            refreshAllData(); // Tải lại cả 2 danh sách
+        }
+
+        // Tải toàn bộ dữ liệu khi trang được mở lần đầu
+        window.onload = refreshAllData;
+    </script>
+
+</body>
+</html>
