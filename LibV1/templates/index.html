@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hệ Thống Thư Viện</title>
+    <style>
+        body { font-family: sans-serif; container: 800px; margin: auto; padding: 20px; }
+        .book { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; border-radius: 5px; }
+        .book button { margin-left: 10px; }
+        #add-book-form { margin-top: 20px; padding: 15px; border: 1px solid #007bff; border-radius: 5px; }
+    </style>
+</head>
+<body>
+
+    <h1>📚 Danh Sách Sách</h1>
+    <div id="book-list"></div>
+
+    <hr>
+
+    <div id="add-book-form">
+        <h3>Thêm Sách Mới</h3>
+        <input type="text" id="title" placeholder="Tên sách" required>
+        <input type="text" id="author" placeholder="Tác giả" required>
+        <input type="number" id="quantity" placeholder="Số lượng" required>
+        <button onclick="addBook()">Thêm Sách</button>
+    </div>
+
+    <script>
+        const API_URL = '/api';
+
+        // Hàm gọi API để lấy và hiển thị danh sách sách
+        async function fetchBooks() {
+            const response = await fetch(`${API_URL}/books`);
+            const books = await response.json();
+            const bookListDiv = document.getElementById('book-list');
+            bookListDiv.innerHTML = ''; // Xóa danh sách cũ
+
+            books.forEach(book => {
+                const bookDiv = document.createElement('div');
+                bookDiv.className = 'book';
+                bookDiv.innerHTML = `
+                    <strong>${book.title}</strong> - <em>${book.author}</em>
+                    <br>
+                    <span>Số lượng còn lại: ${book.quantity}</span>
+                    <button onclick="borrowBook(${book.id})" ${book.quantity <= 0 ? 'disabled' : ''}>Mượn</button>
+                    <button onclick="returnBook(${book.id})">Trả</button>
+                `;
+                bookListDiv.appendChild(bookDiv);
+            });
+        }
+
+        // Hàm gọi API để thêm sách mới
+        async function addBook() {
+            const title = document.getElementById('title').value;
+            const author = document.getElementById('author').value;
+            const quantity = parseInt(document.getElementById('quantity').value);
+
+            await fetch(`${API_URL}/books`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title, author, quantity })
+            });
+
+            // Làm mới lại danh sách sách
+            fetchBooks();
+        }
+
+        // Hàm gọi API mượn sách
+        async function borrowBook(bookId) {
+            const response = await fetch(`${API_URL}/borrow`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ book_id: bookId })
+            });
+            const result = await response.json();
+            if (response.ok) {
+                alert(result.message);
+            } else {
+                alert(`Lỗi: ${result.error}`);
+            }
+            fetchBooks();
+        }
+
+        // Hàm gọi API trả sách
+        async function returnBook(bookId) {
+            await fetch(`${API_URL}/return`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ book_id: bookId })
+            });
+            fetchBooks();
+        }
+
+        // Tải danh sách sách khi trang được mở
+        window.onload = fetchBooks;
+    </script>
+
+</body>
+</html>
