@@ -4,10 +4,12 @@ import jwt
 from functools import wraps
 from flasgger import Swagger
 from flask_caching import Cache # Import Cache
+import os
+from dotenv import load_dotenv
 
+load_dotenv()
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'a_very_secret_key_that_should_be_changed'
-
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
 # --- CẤU HÌNH CACHE ---
 # Cấu hình để sử dụng cache đơn giản, lưu trong bộ nhớ.
 config = {
