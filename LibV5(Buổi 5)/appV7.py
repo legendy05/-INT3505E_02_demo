@@ -1,5 +1,5 @@
 from flask import Flask, jsonify, request, render_template
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import jwt
 from functools import wraps
 from flasgger import Swagger
@@ -195,7 +195,7 @@ def login():
         'user_id': str(user.id), # Chuyển ObjectId thành string
         'username': user.username,
         'roles': user.roles, # Thêm roles vào token
-        'exp': datetime.utcnow() + timedelta(minutes=60)
+        'exp': datetime.now(timezone.utc) + timedelta(minutes=60)
     }, app.config['SECRET_KEY'], algorithm="HS256")
     return jsonify({'token': token})
 
@@ -248,34 +248,51 @@ def get_all_books(current_user):
     print("LOG: Fetching books from data source (not cache)...")
 
     # --- Lấy các tham số từ query string ---
-    title_query = request.args.get('title', type=str)
-    author_query = request.args.get('author', type=str)
-    page = request.args.get('page', 1, type=int)
-    limit = request.args.get('limit', 5, type=int)
-
-    query = Book.objects()
-    if title_query:
-        query = query.filter(title__icontains=title_query)
-    if author_query:
-        query = query.filter(author__icontains=author_query)
-
     try:
-        paginated_query = query.paginate(page=page, per_page=limit)
+        title_query = request.args.get('title', type=str)
+        author_query = request.args.get('author', type=str)
+        page = request.args.get('page', 1, type=int)
+        limit = request.args.get('limit', 5, type=int)
+
+        query = Book.objects()
+        if title_query:
+            query = query.filter(title__icontains=title_query)
+        if author_query:
+            query = query.filter(author__icontains=author_query)
+
+        # --- LOGIC PHÂN TRANG BẰNG MONGOENGINE NGUYÊN BẢN ---
+
+        # 1. Đếm tổng số mục TRƯỚC KHI phân trang
+        total_items = query.count()
+
+        # 2. Tính tổng số trang
+        total_pages = (total_items + limit - 1) // limit
+        if page < 1: page = 1  # Đảm bảo trang không bị âm
+
+        # 3. Tính toán vị trí bỏ qua (skip)
+        skip_count = (page - 1) * limit
+
+        # 4. Lấy dữ liệu của trang đó
+        books_list = query.skip(skip_count).limit(limit)
+        paginated_data = [book.to_dict() for book in books_list]
+        # -----------------------------------------------
+
+        # Đảm bảo hàm LUÔN LUÔN trả về response này
+        return jsonify({
+            'message': 'Books retrieved successfully',
+            'data': paginated_data,
+            'pagination': {
+                'currentPage': page,
+                'limit': limit,
+                'totalItems': total_items,
+                'totalPages': total_pages
+            }
+        })
+
     except Exception as e:
-        return jsonify({'message': 'Pagination error', 'error': str(e)}), 400
-
-    paginated_data = [book.to_dict() for book in paginated_query.items]
-
-    return jsonify({
-        'message': 'Books retrieved successfully',
-        'data': paginated_data,
-        'pagination': {
-            'currentPage': page,
-            'limit': limit,
-            'totalItems': paginated_query.total,
-            'totalPages': paginated_query.pages
-        }
-    })
+        # Bắt các lỗi khác nếu có
+        print(f"Error in get_all_books: {e}")
+        return jsonify({'message': 'An internal error occurred', 'error': str(e)}), 500
 
 @app.route('/api/borrow-records', methods=['GET'])
 @token_required
@@ -404,4 +421,43 @@ def index():
     return render_template('index2.html')
 
 if __name__ == '__main__':
+    # --- KHỐI THÊM DỮ LIỆU MẪU (SEEDING) ---
+    print("Clearing old book data...")
+    Book.objects.delete()  # Xóa sạch tất cả sách cũ để tránh trùng lặp
+
+    print("Adding 20 sample books to database...")
+
+    # Dữ liệu 20 cuốn sách
+    sample_books_data = [
+        {'title': 'Lão Hạc', 'author': 'Nam Cao', 'quantity': 5},
+        {'title': 'Số Đỏ', 'author': 'Vũ Trọng Phụng', 'quantity': 3},
+        {'title': 'Dế Mèn Phiêu Lưu Ký', 'author': 'Tô Hoài', 'quantity': 10},
+        {'title': 'Nhà Giả Kim', 'author': 'Paulo Coelho', 'quantity': 8},
+        {'title': 'Đắc Nhân Tâm', 'author': 'Dale Carnegie', 'quantity': 15},
+        {'title': 'Harry Potter và Hòn Đá Phù Thủy', 'author': 'J.K. Rowling', 'quantity': 7},
+        {'title': 'Tắt Đèn', 'author': 'Ngô Tất Tố', 'quantity': 2},
+        {'title': 'Chiến Tranh và Hòa Bình', 'author': 'Leo Tolstoy', 'quantity': 4},
+        {'title': 'Bố Già', 'author': 'Mario Puzo', 'quantity': 5},
+        {'title': 'Những Người Khốn Khổ', 'author': 'Victor Hugo', 'quantity': 3},
+        {'title': 'Tôi Thấy Hoa Vàng Trên Cỏ Xanh', 'author': 'Nguyễn Nhật Ánh', 'quantity': 12},
+        {'title': 'Hai Số Phận', 'author': 'Jeffrey Archer', 'quantity': 6},
+        {'title': 'Mắt Biếc', 'author': 'Nguyễn Nhật Ánh', 'quantity': 9},
+        {'title': 'Giết Con Chim Nhại', 'author': 'Harper Lee', 'quantity': 4},
+        {'title': 'Rừng Na Uy', 'author': 'Haruki Murakami', 'quantity': 7},
+        {'title': '1984', 'author': 'George Orwell', 'quantity': 5},
+        {'title': 'Ông Già và Biển Cả', 'author': 'Ernest Hemingway', 'quantity': 3},
+        {'title': 'Hoàng Tử Bé', 'author': 'Antoine de Saint-Exupéry', 'quantity': 10},
+        {'title': 'Trăm Năm Cô Đơn', 'author': 'Gabriel Garcia Marquez', 'quantity': 2},
+        {'title': 'Chí Phèo', 'author': 'Nam Cao', 'quantity': 5}
+    ]
+
+    # Tạo các đối tượng Book từ data
+    books_to_insert = [Book(**data) for data in sample_books_data]
+
+    # Thêm hàng loạt vào DB (nhanh hơn là save() 20 lần)
+    Book.objects.insert(books_to_insert)
+
+    print(f"Successfully added {len(books_to_insert)} books.")
+    # ----------------------------------------
+
     app.run(debug=True)
