@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hệ Thống Thư Viện V7</title>
+    <title>Hệ Thống Thư Viện V5</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -45,6 +45,15 @@
         .item:hover {
             box-shadow: 0 4px 10px rgba(0,0,0,0.12);
         }
+        #borrow-section h3 {
+             font-size: 1.1em;
+             color: #17a2b8;
+             border-bottom-color: #bee5eb;
+        }
+        #borrow-section .item {
+            padding: 15px;
+            margin-bottom: 15px;
+        }
         input[type="text"], input[type="password"] {
             width: calc(100% - 22px);
             padding: 10px;
@@ -70,11 +79,11 @@
             background-color: #ccc;
             cursor: not-allowed;
         }
-        .item button {
+        .item button, #book-table button { /* Áp dụng style cho button trong bảng */
              width: auto;
              padding: 8px 12px;
              font-size: 14px;
-             margin-top: 10px;
+             margin-top: 0; /* Bỏ margin top cho button trong bảng */
         }
         #user-status button {
             background-color: #dc3545;
@@ -93,49 +102,90 @@
             margin-top: 15px;
             display: inline-block;
         }
+
+        /* [THÊM MỚI] CSS cho bảng sách */
+        #book-table {
+            width: 100%;
+            border-collapse: collapse; /* Gộp đường viền */
+            margin-top: 15px;
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.08);
+            overflow: hidden; /* Để bo góc hoạt động */
+        }
+        #book-table th, #book-table td {
+            border: 1px solid #ddd;
+            padding: 12px 15px;
+            text-align: left;
+        }
+        #book-table th {
+            background-color: #007bff;
+            color: white;
+            font-weight: bold;
+        }
+        #book-table tbody tr:nth-child(even) {
+            background-color: #f9f9f9; /* Màu nền xen kẽ */
+        }
+        #book-table tbody tr:hover {
+            background-color: #f1f1f1; /* Highlight khi di chuột qua */
+        }
+        #book-table td:last-child {
+            text-align: center; /* Căn giữa nút Mượn */
+        }
     </style>
 </head>
 <body>
 
-    <h1>Hệ Thống Thư Viện V7 (MongoDB)</h1>
+    <h1>Hệ Thống Thư Viện V5 (MongoDB)</h1>
 
     <div class="container">
         <div class="sidebar">
-
-            <!-- [MỚI] Form Đăng Ký (ẩn ban đầu) -->
             <div id="register-section" class="form-section" style="display:none;">
-                <h3>🆕 Đăng ký tài khoản</h3>
-                <input type="text" id="reg-username" placeholder="Tên đăng nhập mới">
-                <input type="password" id="reg-password" placeholder="Mật khẩu">
-                <input type="password" id="reg-confirm-password" placeholder="Xác nhận mật khẩu">
-                <button onclick="register()">Đăng ký</button>
-                <a class="toggle-link" onclick="toggleForms()">Đã có tài khoản? Đăng nhập</a>
-            </div>
-
-            <div id="login-section" class="form-section">
-                <h3>👤 Đăng nhập</h3>
-                <input type="text" id="username" placeholder="Username (vd: user_one)">
-                <input type="password" id="password" placeholder="Password (vd: password1)">
-                <button onclick="login()">Đăng nhập</button>
-                <a class="toggle-link" onclick="toggleForms()">Chưa có tài khoản? Đăng ký</a>
-            </div>
-
-            <div id="user-status" class="form-section" style="display:none;">
-                </div>
+                 <h3>🆕 Đăng ký tài khoản</h3>
+                 <input type="text" id="reg-username" placeholder="Tên đăng nhập mới">
+                 <input type="password" id="reg-password" placeholder="Mật khẩu">
+                 <input type="password" id="reg-confirm-password" placeholder="Xác nhận mật khẩu">
+                 <button onclick="register()">Đăng ký</button>
+                 <a class="toggle-link" onclick="toggleForms()">Đã có tài khoản? Đăng nhập</a>
+             </div>
+             <div id="login-section" class="form-section">
+                 <h3>👤 Đăng nhập</h3>
+                 <input type="text" id="username" placeholder="Username (vd: user_one)">
+                 <input type="password" id="password" placeholder="Password (vd: password1)">
+                 <button onclick="login()">Đăng nhập</button>
+                 <a class="toggle-link" onclick="toggleForms()">Chưa có tài khoản? Đăng ký</a>
+             </div>
+             <div id="user-status" class="form-section" style="display:none;">
+                 <!-- Nội dung được cập nhật bằng JS -->
+             </div>
+             <section id="borrow-section" style="display:none;">
+                  <h3>📋 Phiếu Mượn Của Bạn</h3>
+                  <div id="borrow-list" class="form-section">
+                      <p class="placeholder">Đang tải phiếu mượn...</p>
+                  </div>
+              </section>
         </div>
 
         <div class="main-content">
             <section>
                 <h2>📚 Sách Trong Thư Viện</h2>
-                <div id="book-list">
-                    <p class="placeholder">Vui lòng đăng nhập để xem sách.</p>
-                </div>
-            </section>
-
-            <section>
-                <h2>📋 Phiếu Mượn Của Bạn</h2>
-                <div id="borrow-list">
-                    <p class="placeholder">Vui lòng đăng nhập để xem phiếu mượn.</p>
+                <!-- [THAY ĐỔI] Sử dụng table thay vì div -->
+                <div id="book-list-container">
+                    <table id="book-table" style="display: none;">
+                        <thead>
+                            <tr>
+                                <th>Tiêu đề</th>
+                                <th>Tác giả</th>
+                                <th>Số lượng</th>
+                                <th>Hành động</th>
+                            </tr>
+                        </thead>
+                        <tbody id="book-table-body">
+                            <!-- Dữ liệu sách sẽ được chèn vào đây bằng JS -->
+                        </tbody>
+                    </table>
+                    <p id="book-list-placeholder" class="placeholder">Vui lòng đăng nhập để xem sách.</p>
                 </div>
             </section>
         </div>
@@ -145,8 +195,7 @@
         const API_URL = '/api';
 
         // --- CÁC HÀM XỬ LÝ XÁC THỰC VÀ TOKEN ---
-
-        // [MỚI] Hàm Đăng Ký
+        // (Giữ nguyên register, login, logout)
         async function register() {
             const username = document.getElementById('reg-username').value;
             const password = document.getElementById('reg-password').value;
@@ -171,7 +220,6 @@
                 alert(`Lỗi đăng ký: ${data.message}`);
             }
         }
-
         async function login() {
             const username = document.getElementById('username').value;
             const password = document.getElementById('password').value;
@@ -195,7 +243,6 @@
                 updateUIForLoggedOutState();
             }
         }
-
         function logout() {
             localStorage.removeItem('token');
             alert('Đã đăng xuất.');
@@ -203,8 +250,7 @@
         }
 
         // --- CÁC HÀM CẬP NHẬT GIAO DIỆN ---
-
-        // [MỚI] Hàm chuyển đổi form
+        // (Giữ nguyên toggleForms, updateUIForLoggedInState, updateUIForLoggedOutState)
         function toggleForms() {
             const loginSection = document.getElementById('login-section');
             const registerSection = document.getElementById('register-section');
@@ -217,15 +263,15 @@
                 registerSection.style.display = 'block';
             }
         }
-
         function updateUIForLoggedInState() {
             const token = localStorage.getItem('token');
             if (!token) return;
 
             document.getElementById('login-section').style.display = 'none';
-            document.getElementById('register-section').style.display = 'none'; // Ẩn luôn form đăng ký
+            document.getElementById('register-section').style.display = 'none';
             const userStatusDiv = document.getElementById('user-status');
             userStatusDiv.style.display = 'block';
+            document.getElementById('borrow-section').style.display = 'block';
 
             const payload = JSON.parse(atob(token.split('.')[1]));
             userStatusDiv.innerHTML = `
@@ -235,96 +281,131 @@
                 <p><small>Token hết hạn lúc: ${new Date(payload.exp * 1000).toLocaleTimeString()}</small></p>
                 <button onclick="logout()">Đăng xuất</button>
             `;
+            // Hiển thị table và ẩn placeholder
+            document.getElementById('book-table').style.display = 'table';
+            document.getElementById('book-list-placeholder').style.display = 'none';
             refreshAllData();
         }
-
         function updateUIForLoggedOutState() {
             document.getElementById('login-section').style.display = 'block';
-            document.getElementById('register-section').style.display = 'none'; // Ẩn form đăng ký
+            document.getElementById('register-section').style.display = 'none';
             document.getElementById('user-status').style.display = 'none';
-            document.getElementById('book-list').innerHTML = '<p class="placeholder">Vui lòng đăng nhập để xem sách.</p>';
+            document.getElementById('borrow-section').style.display = 'none';
             document.getElementById('borrow-list').innerHTML = '<p class="placeholder">Vui lòng đăng nhập để xem phiếu mượn.</p>';
+
+            // Ẩn table và hiện placeholder
+            document.getElementById('book-table').style.display = 'none';
+            document.getElementById('book-table-body').innerHTML = ''; // Xóa dữ liệu cũ trong bảng
+            document.getElementById('book-list-placeholder').style.display = 'block';
+            document.getElementById('book-list-placeholder').textContent = 'Vui lòng đăng nhập để xem sách.';
         }
 
         // --- CÁC HÀM GỌI API VÀ VẼ LẠI DỮ LIỆU ---
-
-        // [CẬP NHẬT] Hàm fetchBooks
+        // [CẬP NHẬT] Hàm fetchBooks để tạo bảng
         async function fetchBooks() {
             const token = localStorage.getItem('token');
             if (!token) return;
 
-            // Lấy 100 sách đầu tiên (bạn có thể thêm logic phân trang sau)
-            const response = await fetch(`${API_URL}/books?page=1&limit=100`, {
-                headers: { 'x-access-token': token }
-            });
+            const bookTable = document.getElementById('book-table');
+            const tableBody = document.getElementById('book-table-body');
+            const placeholder = document.getElementById('book-list-placeholder');
 
-            if (!response.ok) {
-                 document.getElementById('book-list').innerHTML = '<p class="placeholder">Lỗi khi tải danh sách sách.</p>';
-                 return;
+            tableBody.innerHTML = ''; // Xóa nội dung cũ
+            placeholder.textContent = 'Đang tải sách...';
+            placeholder.style.display = 'block';
+            bookTable.style.display = 'none';
+
+            try {
+                const response = await fetch(`${API_URL}/books?page=1&limit=100`, { // Lấy tối đa 100 cuốn
+                    headers: { 'x-access-token': token }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Lỗi HTTP ${response.status}`);
+                }
+
+                const data = await response.json();
+                const books = data.data;
+
+                if (!books || books.length === 0) {
+                    placeholder.textContent = 'Thư viện hiện không có sách.';
+                    placeholder.style.display = 'block';
+                    bookTable.style.display = 'none';
+                    return;
+                }
+
+                books.forEach(book => {
+                    const row = tableBody.insertRow(); // Tạo hàng mới <tr>
+
+                    const cellTitle = row.insertCell(); // Tạo ô <td>
+                    cellTitle.textContent = book.title;
+
+                    const cellAuthor = row.insertCell();
+                    cellAuthor.textContent = book.author;
+
+                    const cellQuantity = row.insertCell();
+                    cellQuantity.textContent = book.quantity;
+
+                    const cellAction = row.insertCell();
+                    const borrowButton = document.createElement('button');
+                    borrowButton.textContent = 'Mượn Sách';
+                    borrowButton.onclick = () => borrowBook(book.id); // Gọi hàm với ID dạng chuỗi
+                    borrowButton.disabled = book.quantity <= 0;
+                    cellAction.appendChild(borrowButton);
+                });
+
+                placeholder.style.display = 'none'; // Ẩn placeholder
+                bookTable.style.display = 'table'; // Hiển thị bảng
+
+            } catch (error) {
+                console.error("Lỗi khi tải sách:", error);
+                placeholder.textContent = 'Lỗi khi tải danh sách sách.';
+                placeholder.style.display = 'block';
+                bookTable.style.display = 'none';
             }
-
-            const data = await response.json();
-            // [SỬA] Dữ liệu sách giờ nằm trong 'data.data'
-            const books = data.data;
-            const bookListDiv = document.getElementById('book-list');
-            bookListDiv.innerHTML = '';
-
-            if (!books || books.length === 0) {
-                 bookListDiv.innerHTML = '<p class="placeholder">Thư viện hiện không có sách.</p>';
-                 return;
-            }
-
-            books.forEach(book => {
-                const itemDiv = document.createElement('div');
-                itemDiv.className = 'item';
-                // [SỬA] book.id giờ là Chuỗi, cần bọc trong dấu nháy
-                itemDiv.innerHTML = `
-                    <strong>${book.title}</strong> - <em>${book.author}</em><br>
-                    <span>Số lượng còn lại: ${book.quantity}</span><br>
-                    <button onclick="borrowBook('${book.id}')" ${book.quantity <= 0 ? 'disabled' : ''}>Mượn Sách</button>
-                `;
-                bookListDiv.appendChild(itemDiv);
-            });
         }
 
-        // [CẬP NHẬT] Hàm fetchBorrowRecords
+        // (Giữ nguyên fetchBorrowRecords, refreshAllData)
         async function fetchBorrowRecords() {
-            const token = localStorage.getItem('token');
-            if (!token) return;
+             const token = localStorage.getItem('token');
+             if (!token) return;
 
-            const response = await fetch(`${API_URL}/borrow-records`, {
-                headers: { 'x-access-token': token }
-            });
-             if (!response.ok) {
-                 document.getElementById('borrow-list').innerHTML = '<p class="placeholder">Lỗi khi tải phiếu mượn.</p>';
-                 return;
-            }
+             const borrowListDiv = document.getElementById('borrow-list');
+             borrowListDiv.innerHTML = '<p class="placeholder">Đang tải phiếu mượn...</p>'; // Thêm trạng thái loading
 
-            const data = await response.json();
-            // Dữ liệu phiếu mượn nằm trong 'data.records' (đã đúng)
-            const records = data.records;
-            const borrowListDiv = document.getElementById('borrow-list');
-            borrowListDiv.innerHTML = '';
+             try {
+                const response = await fetch(`${API_URL}/borrow-records`, {
+                    headers: { 'x-access-token': token }
+                });
+                 if (!response.ok) {
+                     throw new Error(`Lỗi HTTP ${response.status}`);
+                 }
 
-            const unreturnedRecords = records.filter(r => !r.returned);
-            if (unreturnedRecords.length === 0) {
-                 borrowListDiv.innerHTML = '<p class="placeholder">Bạn chưa mượn cuốn sách nào.</p>';
-                 return;
-            }
+                const data = await response.json();
+                const records = data.records;
+                borrowListDiv.innerHTML = ''; // Xóa nội dung cũ
 
-            unreturnedRecords.forEach(record => {
-                const itemDiv = document.createElement('div');
-                itemDiv.className = 'item';
-                // [SỬA] record.id giờ là Chuỗi, cần bọc trong dấu nháy
-                itemDiv.innerHTML = `
-                    <strong>Sách: ${record.book_title}</strong> (mượn bởi ${record.username})<br>
-                    <span>Ngày mượn: ${new Date(record.borrow_date).toLocaleString()}</span><br>
-                    <button onclick="returnBook('${record.id}')">Trả Sách</button>
-                `;
-                borrowListDiv.appendChild(itemDiv);
-            });
+                const unreturnedRecords = records.filter(r => !r.returned);
+                if (unreturnedRecords.length === 0) {
+                     borrowListDiv.innerHTML = '<p class="placeholder">Bạn chưa mượn cuốn sách nào.</p>';
+                     return;
+                }
+
+                unreturnedRecords.forEach(record => {
+                    const itemDiv = document.createElement('div');
+                    itemDiv.className = 'item';
+                    itemDiv.innerHTML = `
+                        <strong>Sách: ${record.book_title}</strong> (mượn bởi ${record.username})<br>
+                        <span>Ngày mượn: ${new Date(record.borrow_date).toLocaleString()}</span><br>
+                        <button onclick="returnBook('${record.id}')">Trả Sách</button>
+                    `;
+                    borrowListDiv.appendChild(itemDiv);
+                });
+             } catch (error) {
+                 console.error("Lỗi khi tải phiếu mượn:", error);
+                 borrowListDiv.innerHTML = '<p class="placeholder">Lỗi khi tải phiếu mượn.</p>';
+             }
         }
-
         function refreshAllData() {
             fetchBooks();
             fetchBorrowRecords();
@@ -332,7 +413,7 @@
 
 
         // --- CÁC HÀM XỬ LÝ HÀNH ĐỘNG CỦA NGƯỜI DÙNG ---
-
+        // (Giữ nguyên borrowBook, returnBook)
         async function borrowBook(bookId) {
             const token = localStorage.getItem('token');
             if (!token) {
@@ -340,7 +421,6 @@
                 return;
             }
 
-            // 'bookId' giờ là string, vẫn đúng với JSON
             const response = await fetch(`${API_URL}/borrow-records`, {
                 method: 'POST',
                 headers: {
@@ -354,8 +434,6 @@
             alert(result.message || result.error);
             if(response.ok) refreshAllData();
         }
-
-        // [CẬP NHẬT] Hàm returnBook
         async function returnBook(recordId) {
             const token = localStorage.getItem('token');
             if (!token) {
@@ -363,7 +441,6 @@
                 return;
             }
 
-            // [SỬA] 'recordId' giờ là string, được đưa vào URL
             const response = await fetch(`${API_URL}/borrow-records/${recordId}`, {
                 method: 'PUT',
                 headers: {
@@ -389,3 +466,4 @@
 
 </body>
 </html>
+
