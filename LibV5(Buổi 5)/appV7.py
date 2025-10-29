@@ -3,14 +3,23 @@ from datetime import datetime, timedelta
 import jwt
 from functools import wraps
 from flasgger import Swagger
+from flask_bcrypt import Bcrypt
 from flask_caching import Cache # Import Cache
 import os
 from dotenv import load_dotenv
-
+import mongoengine as db
+from mongoengine import connect
+from mongoengine.errors import DoesNotExist, ValidationError
 
 load_dotenv()
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
+
+bcrypt = Bcrypt(app)
+# GỌI KẾT NỐI TRỰC TIẾP
+mongo_uri = os.getenv('MONGO_URI', 'mongodb://localhost:27017/library_db')
+connect(db='library_db', host=mongo_uri)
+
 # --- CẤU HÌNH CACHE ---
 # Cấu hình để sử dụng cache đơn giản, lưu trong bộ nhớ.
 config = {
@@ -45,24 +54,64 @@ swagger_template = {
 swagger = Swagger(app, template=swagger_template)
 
 
-# --- Dữ liệu mẫu (giữ nguyên) ---
-users = [
-    {'id': 1, 'username': 'user_one', 'password': 'password1'},
-    {'id': 2, 'username': 'user_two', 'password': 'password2'}
-]
-books = [
-    {'id': 1, 'title': 'Lão Hạc', 'author': 'Nam Cao', 'quantity': 5},
-    {'id': 2, 'title': 'Số Đỏ', 'author': 'Vũ Trọng Phụng', 'quantity': 3},
-    {'id': 3, 'title': 'Dế Mèn Phiêu Lưu Ký', 'author': 'Tô Hoài', 'quantity': 10},
-    {'id': 4, 'title': 'Nhà Giả Kim', 'author': 'Paulo Coelho', 'quantity': 8},
-    {'id': 5, 'title': 'Đắc Nhân Tâm', 'author': 'Dale Carnegie', 'quantity': 15},
-    {'id': 6, 'title': 'Harry Potter và Hòn Đá Phù Thủy', 'author': 'J.K. Rowling', 'quantity': 7},
-    {'id': 7, 'title': 'Tắt Đèn', 'author': 'Ngô Tất Tố', 'quantity': 0}
-]
-borrow_records = []
-next_borrow_id = 1
+class User(db.Document):
+    username = db.StringField(required=True, unique=True)
+    password = db.StringField(required=True)
+    roles = db.ListField(db.StringField(), default=['user'])
+    meta = {'collection': 'users'}
 
-# Decorator (giữ nguyên)
+    # Hàm băm mật khẩu
+    def hash_password(self):
+        self.password = bcrypt.generate_password_hash(self.password).decode('utf-8')
+
+    # Hàm kiểm tra mật khẩu
+    def check_password(self, password):
+        return bcrypt.check_password_hash(self.password, password)
+
+    def to_dict(self):
+        return {
+            'id': str(self.id),
+            'username': self.username,
+            'roles': self.roles
+        }
+
+class Book(db.Document):
+    title = db.StringField(required=True)
+    author = db.StringField(required=True)
+    quantity = db.IntField(default=0)
+    meta = {'collection': 'books'}
+
+    def to_dict(self):
+        return {
+            'id': str(self.id),
+            'title': self.title,
+            'author': self.author,
+            'quantity': self.quantity
+        }
+
+class BorrowRecord(db.Document):
+    user_id = db.StringField(required=True)
+    username = db.StringField(required=True)
+    book_id = db.StringField(required=True)
+    book_title = db.StringField(required=True)
+    borrow_date = db.DateTimeField(default=datetime.utcnow)
+    returned = db.BooleanField(default=False)
+    return_date = db.DateTimeField(null=True)
+    meta = {'collection': 'borrow_records'}
+
+    def to_dict(self):
+        return {
+            'id': str(self.id),
+            'user_id': self.user_id,
+            'username': self.username,
+            'book_id': self.book_id,
+            'book_title': self.book_title,
+            'borrow_date': self.borrow_date.isoformat() + 'Z',
+            'returned': self.returned,
+            'return_date': self.return_date.isoformat() + 'Z' if self.return_date else None
+        }
+
+# Decorator
 def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -70,12 +119,50 @@ def token_required(f):
         if not token: return jsonify({'message': 'Token is missing!'}), 401
         try:
             data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=["HS256"])
-            current_user = next((u for u in users if u['id'] == data['user_id']), None)
+            current_user = User.objects(id = data['user_id']).first()
             if not current_user: return jsonify({'message': 'User not found!'}), 401
         except Exception as e:
             return jsonify({'message': 'Token is invalid!', 'error': str(e)}), 401
         return f(current_user, *args, **kwargs)
     return decorated
+
+# ---ENDPOINT ĐĂNG KÝ ---
+@app.route('/api/register', methods=['POST'])
+def register():
+    """
+    Đăng ký một người dùng mới
+    Mật khẩu sẽ được tự động mã hóa.
+    ---
+    tags: [Authentication]
+    parameters:
+      - name: body
+        in: body
+        required: true
+        schema:
+          id: Register
+          required: [username, password]
+          properties:
+            username: {type: string, description: Tên đăng nhập mong muốn}
+            password: {type: string, description: Mật khẩu}
+    responses:
+      201: {description: Đăng ký thành công.}
+      400: {description: Tên đăng nhập đã tồn tại.}
+    """
+    data = request.json
+    if not data or not data.get('username') or not data.get('password'):
+        return jsonify({'message': 'Missing username or password'}), 400
+
+    if User.objects(username=data.get('username')).first():
+        return jsonify({'message': 'Username already exists'}), 400
+
+    new_user = User(
+        username=data.get('username'),
+        password=data.get('password') # Mật khẩu thô
+    )
+    new_user.hash_password() # Mã hóa mật khẩu
+    new_user.save()
+
+    return jsonify({'message': 'User registered successfully'}), 201
 
 # === API Routes với tài liệu Swagger ===
 
@@ -101,12 +188,13 @@ def login():
       401: {description: Sai thông tin đăng nhập.}
     """
     data = request.json
-    user = next((u for u in users if u['username'] == data.get('username')), None)
-    if not user or user['password'] != data.get('password'):
+    user = User.objects(username=data.get('username')).first() # Tìm user trong DB
+    if not user or not user.check_password(data.get('password')):
         return jsonify({'message': 'Could not verify, invalid credentials'}), 401
     token = jwt.encode({
-        'user_id': user['id'],
-        'username': user['username'],
+        'user_id': str(user.id), # Chuyển ObjectId thành string
+        'username': user.username,
+        'roles': user.roles, # Thêm roles vào token
         'exp': datetime.utcnow() + timedelta(minutes=60)
     }, app.config['SECRET_KEY'], algorithm="HS256")
     return jsonify({'token': token})
@@ -165,43 +253,27 @@ def get_all_books(current_user):
     page = request.args.get('page', 1, type=int)
     limit = request.args.get('limit', 5, type=int)
 
-    # --- Lọc dữ liệu (Filtering) ---
-    filtered_books = list(books)  # Bắt đầu với toàn bộ danh sách
-
+    query = Book.objects()
     if title_query:
-        # Lọc theo tiêu đề, tìm kiếm chứa chuỗi và không phân biệt hoa thường
-        filtered_books = [
-            book for book in filtered_books
-            if title_query.lower() in book['title'].lower()
-        ]
-
+        query = query.filter(title__icontains=title_query)
     if author_query:
-        # Lọc theo tác giả
-        filtered_books = [
-            book for book in filtered_books
-            if author_query.lower() in book['author'].lower()
-        ]
+        query = query.filter(author__icontains=author_query)
 
-    # --- Phân trang (Pagination) ---
-    total_items = len(filtered_books)
-    start_index = (page - 1) * limit
-    end_index = start_index + limit
+    try:
+        paginated_query = query.paginate(page=page, per_page=limit)
+    except Exception as e:
+        return jsonify({'message': 'Pagination error', 'error': str(e)}), 400
 
-    # Cắt danh sách để lấy đúng các mục cho trang hiện tại
-    paginated_data = filtered_books[start_index:end_index]
+    paginated_data = [book.to_dict() for book in paginated_query.items]
 
-    # Tính tổng số trang
-    total_pages = (total_items + limit - 1) // limit
-
-    # --- Trả về response JSON hoàn chỉnh ---
     return jsonify({
         'message': 'Books retrieved successfully',
         'data': paginated_data,
         'pagination': {
             'currentPage': page,
             'limit': limit,
-            'totalItems': total_items,
-            'totalPages': total_pages
+            'totalItems': paginated_query.total,
+            'totalPages': paginated_query.pages
         }
     })
 
@@ -218,8 +290,10 @@ def get_my_borrow_records(current_user):
       200: {description: Danh sách các phiếu mượn của bạn.}
       401: {description: Token không hợp lệ hoặc bị thiếu.}
     """
-    my_records = [r for r in borrow_records if r['user_id'] == current_user['id']]
-    return jsonify({'records': my_records})
+    # Tìm các phiếu mượn của user (dùng ID từ token) trong DB
+    records = BorrowRecord.objects(user_id=str(current_user.id))
+    my_records_data = [r.to_dict() for r in records]
+    return jsonify({'records': my_records_data})
 
 @app.route('/api/borrow-records', methods=['POST'])
 @token_required
@@ -239,30 +313,45 @@ def borrow_book(current_user):
           id: Borrow
           required: [book_id]
           properties:
-            book_id: {type: integer, description: ID của sách muốn mượn.}
+            book_id: {type: string, description: ID của sách muốn mượn.}
     responses:
       201: {description: Mượn sách thành công.}
       404: {description: Sách không tồn tại hoặc đã hết.}
     """
-    global next_borrow_id
     data = request.json
     book_id = data.get('book_id')
-    book = next((b for b in books if b['id'] == book_id), None)
-    if not book or book['quantity'] <= 0:
-        return jsonify({'error': 'Sách không hợp lệ hoặc đã hết'}), 404
 
-    # XÓA CACHE: Vì số lượng sách thay đổi, cần xóa cache cũ
+    try:
+        book = Book.objects(id=book_id).first()
+    except (DoesNotExist, ValidationError):
+        return jsonify({'error': 'Book ID không hợp lệ'}), 400
+
+    if not book or book.quantity <= 0:
+        return jsonify({'error': 'Sách không tồn tại hoặc đã hết'}), 404
+
+    # Giảm số lượng sách (atomic)
+    book.update(dec__quantity=1)
+
+    # XÓA CACHE (Giữ nguyên)
     cache.delete('view//api/books')
     print("LOG: Book list cache cleared due to borrowing.")
 
-    book['quantity'] -= 1
-    new_record = {'id': next_borrow_id, 'user_id': current_user['id'], 'username': current_user['username'], 'book_id': book_id, 'book_title': book['title'], 'borrow_date': datetime.utcnow().isoformat() + 'Z', 'returned': False}
-    borrow_records.append(new_record)
-    next_borrow_id += 1
-    return jsonify({'message': f"User '{current_user['username']}' mượn sách '{book['title']}' thành công", 'record': new_record}), 201
+    # Tạo phiếu mượn mới trong DB
+    new_record = BorrowRecord(
+        user_id=str(current_user.id),
+        username=current_user.username,
+        book_id=str(book.id),
+        book_title=book.title
+    )
+    new_record.save()
+
+    return jsonify({
+        'message': f"User '{current_user.username}' mượn sách '{book.title}' thành công",
+        'record': new_record.to_dict()
+    }), 201
 
 
-@app.route('/api/borrow-records/<int:record_id>', methods=['PUT'])
+@app.route('/api/borrow-records/<string:record_id>', methods=['PUT'])
 @token_required
 def return_book(current_user, record_id):
     """
@@ -275,7 +364,7 @@ def return_book(current_user, record_id):
     parameters:
       - name: record_id
         in: path
-        type: integer
+        type: string
         required: true
         description: ID của phiếu mượn cần trả.
     responses:
@@ -283,24 +372,36 @@ def return_book(current_user, record_id):
       403: {description: Không có quyền trả phiếu mượn này.}
       404: {description: Không tìm thấy phiếu mượn.}
     """
-    record = next((r for r in borrow_records if r['id'] == record_id), None)
-    if not record: return jsonify({'error': 'Không tìm thấy phiếu mượn'}), 404
-    if record['user_id'] != current_user['id']: return jsonify({'error': 'Bạn không có quyền trả phiếu mượn này'}), 403
-    if record['returned']: return jsonify({'message': 'Sách này đã được trả từ trước'}), 200
+    try:
+        record = BorrowRecord.objects(id=record_id).first()
+    except (DoesNotExist, ValidationError):
+        return jsonify({'error': 'Phiếu mượn không hợp lệ'}), 400
 
-    # XÓA CACHE: Vì số lượng sách thay đổi, cần xóa cache cũ
+    if not record:
+        return jsonify({'error': 'Không tìm thấy phiếu mượn'}), 404
+
+        # Kiểm tra quyền sở hữu
+    if record.user_id != str(current_user.id):
+        return jsonify({'error': 'Bạn không có quyền trả phiếu mượn này'}), 403
+
+    if record.returned:
+        return jsonify({'message': 'Sách này đã được trả từ trước'}), 200
+
+        # XÓA CACHE (Giữ nguyên)
     cache.delete('view//api/books')
     print("LOG: Book list cache cleared due to returning.")
 
-    book = next((b for b in books if b['id'] == record['book_id']), None)
-    if book: book['quantity'] += 1
-    record['returned'] = True
-    record['return_date'] = datetime.utcnow().isoformat() + 'Z'
-    return jsonify({'message': f"Trả sách '{book['title']}' thành công"}), 200
+    # Tăng lại số lượng sách (atomic)
+    Book.objects(id=record.book_id).update(inc__quantity=1)
+
+    # Cập nhật phiếu mượn là đã trả
+    record.update(returned=True, return_date=datetime.utcnow())
+
+    return jsonify({'message': f"Trả sách '{record.book_title}' thành công"}), 200
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return render_template('index2.html')
 
 if __name__ == '__main__':
     app.run(debug=True)
