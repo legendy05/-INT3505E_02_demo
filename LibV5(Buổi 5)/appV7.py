@@ -350,7 +350,7 @@ def borrow_book(current_user):
     book.update(dec__quantity=1)
 
     # XÓA CACHE (Giữ nguyên)
-    cache.delete('view//api/books')
+    cache.clear()
     print("LOG: Book list cache cleared due to borrowing.")
 
     # Tạo phiếu mượn mới trong DB
@@ -404,8 +404,8 @@ def return_book(current_user, record_id):
     if record.returned:
         return jsonify({'message': 'Sách này đã được trả từ trước'}), 200
 
-        # XÓA CACHE (Giữ nguyên)
-    cache.delete('view//api/books')
+        # XÓA CACHE
+    cache.clear()
     print("LOG: Book list cache cleared due to returning.")
 
     # Tăng lại số lượng sách (atomic)
