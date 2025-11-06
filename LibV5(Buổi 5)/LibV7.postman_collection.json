@@ -34,10 +34,10 @@
 					"listen": "prerequest",
 					"script": {
 						"exec": [
-							"// Tạo ra một username ngẫu nhiên và LƯU NÓ LẠI\r",
-							"// để request 'Login' có thể dùng *chính xác* username này.\r",
-							"var randomUsername = pm.variables.replaceIn(\"{{NEW_USER}}\");\r",
-							"pm.environment.set(\"STABLE_USER\", randomUsername);"
+							"// Tạo username ngẫu nhiên mỗi lần test\r",
+							"var randomUsername = \"user_\" + Math.floor(Math.random() * 100000);\r",
+							"pm.environment.set(\"STABLE_USER\", randomUsername);\r",
+							""
 						],
 						"type": "text/javascript",
 						"packages": {},
@@ -89,15 +89,12 @@
 							"pm.test(\"Status code is 200 OK\", function () {\r",
 							"    pm.response.to.have.status(200);\r",
 							"});\r",
-							"\r",
-							"// Kỹ năng 3: Lấy dữ liệu từ response và lưu vào Environment\r",
 							"pm.test(\"Token is received and saved\", function () {\r",
 							"    var jsonData = pm.response.json();\r",
-							"    pm.expect(jsonData.token).to.be.a(\"string\"); // Kiểm tra xem token có phải là 1 chuỗi\r",
-							"\r",
-							"    // LƯU TOKEN VÀO MÔI TRƯỜNG\r",
+							"    pm.expect(jsonData.token).to.be.a(\"string\");\r",
 							"    pm.environment.set(\"AUTH_TOKEN\", jsonData.token);\r",
-							"});"
+							"});\r",
+							""
 						],
 						"type": "text/javascript",
 						"packages": {},
@@ -327,7 +324,7 @@
 					}
 				},
 				"url": {
-					"raw": "{{API_URL}}/api/borrow-records/{{RECORD_ID}}?x-access-token={{AUTH_TOKEN}}",
+					"raw": "{{API_URL}}/api/borrow-records/{{RECORD_ID}}",
 					"host": [
 						"{{API_URL}}"
 					],
@@ -335,12 +332,6 @@
 						"api",
 						"borrow-records",
 						"{{RECORD_ID}}"
-					],
-					"query": [
-						{
-							"key": "x-access-token",
-							"value": "{{AUTH_TOKEN}}"
-						}
 					]
 				}
 			},
