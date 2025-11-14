@@ -120,7 +120,7 @@ def token_required(f):
         token = request.headers.get('x-access-token')
         if not token: return jsonify({'message': 'Token is missing!'}), 401
         try:
-            data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=["HS26"])
+            data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=["HS256"])
             current_user = User.objects(id=data['user_id']).first()
             if not current_user: return jsonify({'message': 'User not found!'}), 401
         except Exception as e:
@@ -194,7 +194,7 @@ def login_v1():
         'username': user.username,
         'roles': user.roles,
         'exp': datetime.now(timezone.utc) + timedelta(minutes=60)
-    }, app.config['SECRET_KEY'], algorithm="HS26")
+    }, app.config['SECRET_KEY'], algorithm="HS256")
     return jsonify({'token': token})
 
 
@@ -418,7 +418,7 @@ def login_v2():
         'username': user.username,
         'roles': user.roles,
         'exp': datetime.now(timezone.utc) + timedelta(minutes=60)
-    }, app.config['SECRET_KEY'], algorithm="HS26")
+    }, app.config['SECRET_KEY'], algorithm="HS256")
     return jsonify({'token': token})
 
 
